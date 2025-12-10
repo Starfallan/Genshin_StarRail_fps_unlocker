@@ -1,0 +1,48 @@
+# CI: Build FPSUnlocker on Windows with MSVC and CMake
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+name: Build FPSUnlocker (Windows, MSVC, CMake)
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC Developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          # sdk: 10.0.22621.0   # 可选：若需固定 SDK，可取消注释并填写合适版本
+          # toolset: 14.35      # 可选：指定 VC++ toolset 版本
+
+      - name: Configure CMake (x64)
+        run: |
+          cmake -S . -B build -A x64
+
+      - name: Build (Release)
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: (Optional) Run tests
+        if: always()
+        run: |
+          if exist build\CTestTestfile.cmake (
+            ctest --test-dir build -C Release --output-on-failure
+          ) else (
+            echo "No ctest configuration found"
+          )
+
+      - name: Upload built exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FPSUnlocker-windows-exe
+          path: |
+            build/**/Release/FPSUnlocker.exe
+            build/FPSUnlocker.exe
+            build/bin/FPSUnlocker.exe
