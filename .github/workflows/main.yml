@@ -1,4 +1,4 @@
-# CI: Build FPSUnlocker on Windows with MSVC and CMake
+# CI: Build FPSUnlocker on Windows with MSVC and CMake, and always upload artifacts
 on:
   push:
     branches: [ main ]
@@ -18,8 +18,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          # sdk: 10.0.22621.0   # 可选：若需固定 SDK，可取消注释并填写合适版本
-          # toolset: 14.35      # 可选：指定 VC++ toolset 版本
 
       - name: Configure CMake (x64)
         run: |
@@ -29,20 +27,33 @@ jobs:
         run: |
           cmake --build build --config Release --parallel
 
-      - name: (Optional) Run tests
-        if: always()
+      - name: (Optional) Run tests if configured
+        shell: pwsh
         run: |
-          if exist build\CTestTestfile.cmake (
+          if (Test-Path 'build/CTestTestfile.cmake') {
             ctest --test-dir build -C Release --output-on-failure
-          ) else (
-            echo "No ctest configuration found"
-          )
+          } else {
+            Write-Host 'No ctest configuration found'
+          }
+
+      - name: Collect artifacts (copy exe to artifacts/)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $exePaths = Get-ChildItem -Path build -Recurse -Filter FPSUnlocker.exe -ErrorAction SilentlyContinue
+          if ($exePaths) {
+            foreach ($f in $exePaths) {
+              $dest = Join-Path (Resolve-Path artifacts).Path $f.Name
+              Copy-Item $f.FullName $dest -Force
+            }
+          } else {
+            Set-Content -Path artifacts/NO_ARTIFACT.txt -Value "No FPSUnlocker.exe was produced. Check build logs."
+          }
 
       - name: Upload built exe artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: FPSUnlocker-windows-exe
-          path: |
-            build/**/Release/FPSUnlocker.exe
-            build/FPSUnlocker.exe
-            build/bin/FPSUnlocker.exe
+          path: artifacts/**
+          retention-days: 90
